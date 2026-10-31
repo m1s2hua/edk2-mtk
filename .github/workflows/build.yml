@@ -46,8 +46,22 @@ jobs:
       - name: Setup platform
         run: ./build.sh -s -t "${{ inputs.target }}" "${{ inputs.platform }}"
 
-      - name: Build
-        run: ./build.sh -t "${{ inputs.target }}" "${{ inputs.platform }}"
+      - name: Build BaseTools (host toolchain, no shim)
+        run: make -C Common/edk2/BaseTools
+
+      - name: Build platform
+        run: |
+          # EDK2 CLANG38 的 AARCH64 目标调用裸 objcopy/strip，需让 PATH 里的
+          # 名字解析到 aarch64 版本，否则报 "architecture aarch64 unknown"
+          mkdir -p "$HOME/tcshim"
+          for t in objcopy strip nm readelf ar ld; do
+            printf '#!/bin/sh\nexec /usr/bin/aarch64-linux-gnu-%s "$@"\n' "$t" > "$HOME/tcshim/$t"
+            chmod +x "$HOME/tcshim/$t"
+          done
+          export PATH="$HOME/tcshim:$PATH"
+          echo "objcopy -> $(command -v objcopy)"
+          objcopy --version | head -1
+          python3 "Platform/${{ inputs.platform }}/PlatformBuild.py" "TARGET=${{ inputs.target }}"
 
       - name: Collect artifacts
         if: always()
