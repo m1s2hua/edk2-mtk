@@ -32,7 +32,7 @@ jobs:
             clang lld llvm \
             python3 python3-pip python3-venv git
           python3 -m pip install --upgrade pip
-          python3 -m pip install edk2-pytool-library edk2-pytool-extensions mkbootimg
+          python3 -m pip install edk2-pytool-library edk2-pytool-extensions
 
       - name: Toolchain versions
         run: |
@@ -42,6 +42,41 @@ jobs:
           ld.lld --version | head -1
           python3 --version
           iasl -v | head -2
+
+      - name: Provide mkbootimg shim
+        run: |
+          sudo tee /usr/local/bin/mkbootimg >/dev/null <<'PYEOF'
+          #!/usr/bin/env python3
+          import argparse, struct
+          ap = argparse.ArgumentParser()
+          ap.add_argument('--header_version', default='4')
+          ap.add_argument('--kernel', required=True)
+          ap.add_argument('--ramdisk', default=None)
+          ap.add_argument('--output', required=True)
+          ap.add_argument('--cmdline', default='')
+          a = ap.parse_args()
+          kernel = open(a.kernel, 'rb').read()
+          ramdisk = open(a.ramdisk, 'rb').read() if a.ramdisk else b''
+          PAGE = 4096
+          def align(x): return (x + PAGE - 1) // PAGE * PAGE
+          hdr = bytearray(PAGE)
+          hdr[0:8] = b'ANDROID!'
+          struct.pack_into('<I', hdr, 8, len(kernel))
+          struct.pack_into('<I', hdr, 12, len(ramdisk))
+          struct.pack_into('<I', hdr, 16, 0x1800017b)
+          struct.pack_into('<I', hdr, 20, 1584)
+          struct.pack_into('<I', hdr, 40, int(a.header_version))
+          if a.cmdline:
+              cb = a.cmdline.encode()
+              hdr[44:44+len(cb)] = cb
+          out = bytearray(hdr) + kernel
+          out += b'\0' * (align(len(out)) - len(out))
+          out += ramdisk
+          out += b'\0' * (align(len(out)) - len(out))
+          open(a.output, 'wb').write(out)
+          PYEOF
+          sudo chmod +x /usr/local/bin/mkbootimg
+          mkbootimg --help 2>&1 | head -3 || true
 
       - name: Setup platform
         run: ./build.sh -s -t "${{ inputs.target }}" "${{ inputs.platform }}"
