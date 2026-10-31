@@ -1,0 +1,67 @@
+name: build-uefi
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform dir under Platform/ (e.g. Xiaomi/emeraldPkg)'
+        required: true
+        default: 'Xiaomi/emeraldPkg'
+      target:
+        description: 'Build target'
+        required: true
+        default: 'RELEASE'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential uuid-dev iasl nasm acpica-tools \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            python3 python3-pip python3-venv git
+          python3 -m pip install --upgrade pip
+          python3 -m pip install edk2-pytool-library edk2-pytool-extensions
+
+      - name: Toolchain versions
+        run: |
+          aarch64-linux-gnu-gcc --version | head -1
+          python3 --version
+          iasl -v | head -2
+
+      - name: Setup platform
+        run: ./build.sh -s -t "${{ inputs.target }}" "${{ inputs.platform }}"
+
+      - name: Build
+        run: ./build.sh -t "${{ inputs.target }}" "${{ inputs.platform }}"
+
+      - name: Collect artifacts
+        if: always()
+        run: |
+          echo "--- tree of Build ---"
+          find Build -maxdepth 3 -type d 2>/dev/null | head -50 || true
+          echo "--- fd / img / bin ---"
+          find . -path ./Common -prune -o -type f \( -name "*.fd" -o -name "*.img" -o -name "*.bin" \) -print 2>/dev/null | head -50 || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uefi-${{ inputs.platform }}-${{ inputs.target }}
+          path: |
+            Build/**/*.fd
+            Build/**/*.img
+            Build/**/*.bin
+            **/*.fd
+          if-no-files-found: warn
+          retention-days: 14
