@@ -20,8 +20,8 @@
   gMediaTekTokenSpaceGuid.PcdUefiMemPoolSize|0x075b0000
 
   # Simple Framebuffer
-  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferWidth|1088
-  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferHeight|2400
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferWidth|1200
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferHeight|2000
   gMediaTekTokenSpaceGuid.PcdMipiFrameBufferAddress|0xfe0d0000
 
 [LibraryClasses]
